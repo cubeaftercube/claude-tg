@@ -162,8 +162,8 @@ export function convert(usdAmount: number, toCurrency: string, rates?: CurrencyR
 
 export function getCurrencySymbol(code: string): string {
   const symbols: Record<string, string> = {
-    USD: "$", EUR: "в‚¬", RUB: "в‚Ѕ", GBP: "ВЈ", JPY: "ВҐ",
-    CNY: "ВҐ", INR: "в‚№", BRL: "R$", CAD: "C$", AUD: "A$",
+    USD: "$", EUR: "€", RUB: "₽", GBP: "£", JPY: "¥",
+    CNY: "¥", INR: "₹", BRL: "R$", CAD: "C$", AUD: "A$",
   };
   return symbols[code] || code;
 }
