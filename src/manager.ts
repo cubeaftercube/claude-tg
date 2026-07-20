@@ -2,7 +2,6 @@ import fs from "node:fs";
 import { Bot } from "grammy";
 import { config } from "./config.js";
 import type { BotConfig } from "./store.js";
-import { getLicenseInfo, getPaymentUrl, getCustomerPortalUrl, detectClaudePlan, getPlanLabel, getLicensePlan, getBotLimit } from "./license.js";
 import { escapeHtml } from "./formatter.js";
 import { loadSchedules } from "./scheduler.js";
 
@@ -77,8 +76,6 @@ export function createManager(callbacks: ManagerCallbacks): Bot {
     "/add TOKEN /path/to/repo — Add a worker bot (inline)\n" +
     "/remove @username — Remove a worker bot\n" +
     "/remove all — Remove all worker bots\n" +
-    "/subscribe — Get a license or upgrade your plan\n" +
-    "/subscription — View license status, billing &amp; cancellation\n" +
     "/feedback — Send feedback or report an issue\n" +
     "/cancel — Cancel current operation\n" +
     "/help — Show this help message\n\n" +
@@ -100,42 +97,10 @@ export function createManager(callbacks: ManagerCallbacks): Bot {
 
   bot.command("bots", async (ctx) => {
     const botList = formatBotList();
-    const plan = getLicensePlan();
-    const limit = getBotLimit(plan);
     const count = callbacks.getActiveWorkers().size;
-    const header = limit === Infinity
-      ? `<b>Active bots (${count}):</b>`
-      : `<b>Active bots (${count}/${limit}):</b>`;
-    await ctx.reply(header + "\n" + botList, {
+    await ctx.reply(`<b>Active bots (${count}):</b>\n` + botList, {
       parse_mode: "HTML",
     });
-  });
-
-  bot.command("subscribe", async (ctx) => {
-    await ctx.reply(
-      "<b>Get clautel</b>\n\n" +
-        "<b>Pro</b> — $4/mo\n" +
-        "• Up to 5 project bots\n\n" +
-        "<b>Max</b> — $9/mo\n" +
-        "• Unlimited project bots\n" +
-        "• Group chat support\n\n" +
-        `<a href="${getPaymentUrl("pro")}">Get Pro</a>  |  <a href="${getPaymentUrl("max")}">Get Max</a>\n\n` +
-        "After purchase you'll receive a license key via email.\n" +
-        "Activate it with:\n" +
-        "<code>clautel activate &lt;key&gt;</code>",
-      { parse_mode: "HTML" }
-    );
-  });
-
-  bot.command("subscription", async (ctx) => {
-    const info = getLicenseInfo();
-    await ctx.reply(
-      "<b>Subscription</b>\n\n" +
-        `<pre>${info}</pre>\n\n` +
-        "<b>Manage billing</b>\n" +
-        `<a href="${getCustomerPortalUrl()}">Payment history, invoices &amp; cancellation</a>`,
-      { parse_mode: "HTML" }
-    );
   });
 
   bot.command("schedules", async (ctx) => {
@@ -281,21 +246,6 @@ export function createManager(callbacks: ManagerCallbacks): Bot {
       await ctx.reply(`Path is not a directory: <code>${escapeHtml(dir)}</code>`, {
         parse_mode: "HTML",
       });
-      return;
-    }
-
-    // Enforce per-plan bot limit
-    const plan = getLicensePlan();
-    const limit = getBotLimit(plan);
-    const currentCount = callbacks.getActiveWorkers().size;
-    if (currentCount >= limit) {
-      await ctx.reply(
-        `You've reached the bot limit for your plan (<b>${limit} bots</b>).\n\n` +
-          `Upgrade to <b>Max</b> for unlimited bots.\n\n` +
-          `<a href="${getPaymentUrl("max")}">Upgrade to Max ($9/mo)</a>`,
-        { parse_mode: "HTML" }
-      );
-      clearConversation(ctx.chat.id);
       return;
     }
 

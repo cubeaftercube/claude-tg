@@ -1,8 +1,9 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import cron from "node-cron";
 import { query } from "@anthropic-ai/claude-agent-sdk";
-import { DATA_DIR } from "./config.js";
+import { config, DATA_DIR } from "./config.js";
 
 const SCHEDULES_FILE = path.join(DATA_DIR, "schedules.json");
 
@@ -143,8 +144,26 @@ export async function parseScheduleWithClaude(input: string): Promise<{
     `Input: "${input.replace(/"/g, '\\"')}"`;
 
   try {
-    // Strip CLAUDECODE env var so SDK subprocess doesn't refuse to start
-    const { CLAUDECODE: _, ...cleanEnv } = process.env;
+    // Strip CLAUDECODE env var so SDK subprocess doesn't refuse to start.
+    // Also strip ANTHROPIC_API_KEY — if explicitly configured in our config, re-add it.
+    const { CLAUDECODE: _, ANTHROPIC_API_KEY: __, ...cleanEnv } = process.env;
+    if (config.ANTHROPIC_API_KEY) {
+      cleanEnv.ANTHROPIC_API_KEY = config.ANTHROPIC_API_KEY;
+    }
+    // Forward env vars from Claude Code's settings.json (e.g. ANTHROPIC_BASE_URL)
+    try {
+      const settingsPath = path.join(os.homedir(), ".claude", "settings.json");
+      if (fs.existsSync(settingsPath)) {
+        const settings = JSON.parse(fs.readFileSync(settingsPath, "utf-8"));
+        if (settings.env && typeof settings.env === "object") {
+          for (const [key, value] of Object.entries(settings.env)) {
+            if (typeof value === "string" && !cleanEnv[key]) {
+              cleanEnv[key] = value;
+            }
+          }
+        }
+      }
+    } catch {}
 
     let resultText = "";
     const q = query({

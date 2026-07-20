@@ -13,9 +13,9 @@ import {
 } from "./formatter.js";
 import type { AskUserQuestion } from "./claude.js";
 import { logUser, logStream, logResult, logError } from "./log.js";
-import { checkLicenseForQuery, getPaymentUrl, detectClaudePlan, getLicensePlan } from "./license.js";
 import { ScheduleManager, parseScheduleWithClaude, generateScheduleId } from "./scheduler.js";
 import type { Schedule } from "./scheduler.js";
+import { getShellManager } from "./shell.js";
 
 const CONFIG_FILE = path.join(DATA_DIR, "config.json");
 
@@ -63,6 +63,7 @@ export function createWorker(botConfig: BotConfig, bridge: ClaudeBridge, tunnelM
     string,
     { resolve: (answer: string) => void; timer: NodeJS.Timeout; options: Array<{ label: string }>; question: string }
   >();
+  const pendingMultiSelect = new Map<string, Set<string>>(); // Accumulated selections for multi-select questions
   const pendingFreeText = new Map<
     number,
     { resolve: (answer: string) => void; timer: NodeJS.Timeout; question: string; msgId: number }
@@ -108,6 +109,18 @@ export function createWorker(botConfig: BotConfig, bridge: ClaudeBridge, tunnelM
     return count;
   }
 
+  function buildMultiSelectKeyboard(requestId: string, selected: Set<string>, options: Array<{ label: string }>): InlineKeyboard {
+    const keyboard = new InlineKeyboard();
+    for (const opt of options) {
+      const check = selected.has(opt.label) ? " ✔" : "";
+      keyboard.text(`${opt.label}${check}`, `ms:toggle:${requestId}:${opt.label}`);
+      keyboard.row();
+    }
+    keyboard.text("Done", `ms:done:${requestId}`);
+    keyboard.text("Other…", `ms:other:${requestId}`);
+    return keyboard;
+  }
+
   function saveNgrokToken(token: string): void {
     let existing: Record<string, unknown> = {};
     try {
@@ -146,7 +159,7 @@ export function createWorker(botConfig: BotConfig, bridge: ClaudeBridge, tunnelM
     }
   }
 
-  // Auth guard — private: owner-only; group: Max plan + owner must be in group
+  // Auth guard — private: owner-only; group: owner must be in group
   bot.use(async (ctx, next) => {
     const chatType = ctx.chat?.type;
     if (chatType === "private") {
@@ -155,9 +168,6 @@ export function createWorker(botConfig: BotConfig, bridge: ClaudeBridge, tunnelM
         return;
       }
     } else if (chatType === "group" || chatType === "supergroup") {
-      if (getLicensePlan() !== "max") {
-        return; // Only Max plan supports group chats — silently ignore
-      }
       if (!await isOwnerInGroup(ctx.chat!.id)) {
         return; // Owner not in this group — silently ignore
       }
@@ -230,13 +240,15 @@ export function createWorker(botConfig: BotConfig, bridge: ClaudeBridge, tunnelM
   bot.command("cost", async (ctx) => {
     const t = bridge.getSessionTokens(ctx.chat.id);
     const total = t.inputTokens + t.outputTokens;
+    const costStr = bridge.getFormattedSessionCost(ctx.chat.id);
+    const costLine = costStr ? `\n<b>Session cost:</b> ${escapeHtml(costStr)}` : "";
     await ctx.reply(
       `<b>Session tokens</b>\n` +
         `Input: ${t.inputTokens.toLocaleString()}\n` +
         `Output: ${t.outputTokens.toLocaleString()}\n` +
         `Cache write: ${t.cacheCreationTokens.toLocaleString()}\n` +
         `Cache read: ${t.cacheReadTokens.toLocaleString()}\n` +
-        `Total: ${total.toLocaleString()}`,
+        `Total: ${total.toLocaleString()}${costLine}`,
       { parse_mode: "HTML" }
     );
   });
@@ -276,22 +288,108 @@ export function createWorker(botConfig: BotConfig, bridge: ClaudeBridge, tunnelM
     // Only the owner can toggle yolo mode (especially important in group chats)
     if (ctx.from?.id !== config.TELEGRAM_OWNER_ID) return;
     const chatId = ctx.chat.id;
-    const enabling = !bridge.isYolo(chatId);
-    bridge.setYolo(chatId, enabling);
+    const currentMode = bridge.getPermissionMode(chatId);
+    const enabling = currentMode !== "bypass";
+    bridge.setPermissionMode(chatId, enabling ? "bypass" : "auto");
     if (enabling) {
       await ctx.reply(
-        "\u26a0\ufe0f <b>YOLO mode ON</b>\n\n" +
+        "\u26a0\ufe0f <b>Bypass Permissions ON</b>\n\n" +
           "All tools will run <b>without approval</b>. " +
           "Claude can execute any command, edit any file, and access the network without asking.\n\n" +
-          "Use /yolo again to disable.",
+          "Use /yolo again to disable, or /mode to choose a different mode.",
         { parse_mode: "HTML" }
       );
     } else {
       await ctx.reply(
-        "\u2705 <b>YOLO mode OFF</b>\n\nTools will require approval again.",
+        "\u2705 <b>Bypass Permissions OFF</b>\n\nReverted to Auto mode. Use /mode for other options.",
         { parse_mode: "HTML" }
       );
     }
+  });
+
+  bot.command("provider", async (ctx) => {
+    const chatId = ctx.chat.id;
+    const arg = ctx.match?.trim();
+    const current = bridge.getProvider(chatId);
+
+    // Import dynamically to avoid issues
+    const { providerRegistry } = await import("./providers/registry.js");
+
+    if (arg) {
+      if (!providerRegistry.has(arg)) {
+        const available = providerRegistry.getAll().map(p => p.label).join(", ");
+        await ctx.reply(`Provider "${arg}" not available. Available: ${available}`);
+        return;
+      }
+      bridge.setProvider(chatId, arg);
+      const label = providerRegistry.get(arg)?.label || arg;
+      await ctx.reply(`Provider set to <b>${escapeHtml(label)}</b>`, { parse_mode: "HTML" });
+      return;
+    }
+
+    const all = providerRegistry.getAll();
+    const keyboard = new InlineKeyboard();
+    for (const p of all) {
+      const check = p.id === current ? " ✔" : "";
+      keyboard.text(`${p.label}${check}`, `provider:${p.id}`).row();
+    }
+
+    await ctx.reply(
+      `Current provider: <b>${escapeHtml(providerRegistry.get(current)?.label || current)}</b>\n\nSelect a provider:`,
+      { parse_mode: "HTML", reply_markup: keyboard }
+    );
+  });
+
+  bot.command("mode", async (ctx) => {
+    const chatId = ctx.chat.id;
+    const current = bridge.getPermissionMode(chatId);
+    const modeLabels: Record<string, string> = {
+      auto: "Auto",
+      plan: "Plan",
+      bypass: "Bypass",
+      manual: "Manual",
+    };
+
+    const keyboard = new InlineKeyboard();
+    for (const [mode, label] of Object.entries(modeLabels)) {
+      const check = mode === current ? " \u2714" : "";
+      keyboard.text(`${label}${check}`, `permode:${mode}`).row();
+    }
+
+    await ctx.reply(
+      `Current mode: <b>${modeLabels[current] || current}</b>\n\nSelect a permission mode:`,
+      { parse_mode: "HTML", reply_markup: keyboard }
+    );
+  });
+
+  bot.command("effort", async (ctx) => {
+    const chatId = ctx.chat.id;
+    const input = ctx.match?.trim();
+    const effortLabels: Record<string, string> = {
+      low: "Low",
+      medium: "Medium",
+      high: "High",
+      xhigh: "X-High",
+      max: "Max",
+    };
+
+    if (input && effortLabels[input]) {
+      bridge.setEffort(chatId, input);
+      await ctx.reply(`Effort set to <b>${effortLabels[input]}</b>`, { parse_mode: "HTML" });
+      return;
+    }
+
+    const current = bridge.getEffort(chatId);
+    const keyboard = new InlineKeyboard();
+    for (const [level, label] of Object.entries(effortLabels)) {
+      const check = level === current ? " \u2714" : "";
+      keyboard.text(`${label}${check}`, `effort:${level}`).row();
+    }
+
+    await ctx.reply(
+      `Current effort: <b>${effortLabels[current] || current}</b>\n\nSelect reasoning effort:`,
+      { parse_mode: "HTML", reply_markup: keyboard }
+    );
   });
 
   bot.command("session", async (ctx) => {
@@ -540,18 +638,9 @@ export function createWorker(botConfig: BotConfig, bridge: ClaudeBridge, tunnelM
 
   function handlePrompt(chatId: number, prompt: string, replyFn: (text: string) => Promise<{ message_id: number }>, senderTag?: string) {
     (async () => {
-      // License check — gate every query
-      const licenseCheck = checkLicenseForQuery();
-      if (!licenseCheck.allowed) {
-        const reason = licenseCheck.reason || `License required.\n\nGet a license: ${getPaymentUrl(detectClaudePlan().tier)}`;
-        await bot.api.sendMessage(chatId, reason);
-        return;
-      }
-      if (licenseCheck.warning) {
-        await bot.api.sendMessage(chatId, licenseCheck.warning);
-      }
-
-      if (bridge.isProcessing(chatId)) {
+      // Atomic lock: tryStartProcessing checks AND sets the processing flag in one step,
+      // closing the race window between the old isProcessing() check and sendMessage().
+      if (!bridge.tryStartProcessing(chatId)) {
         const queue = messageQueues.get(chatId);
         if (queue && queue.length >= MAX_QUEUE_SIZE) {
           await bot.api.sendMessage(chatId, "Queue full — please wait for current tasks to finish.");
@@ -565,7 +654,7 @@ export function createWorker(botConfig: BotConfig, bridge: ClaudeBridge, tunnelM
       // Apply sender attribution for group chats
       const effectivePrompt = senderTag ? `[from ${senderTag}]: ${prompt}` : prompt;
 
-      bridge.setLastPrompt(chatId, prompt);
+      bridge.setLastPrompt(chatId, effectivePrompt);
 
       await bot.api.sendChatAction(chatId, "typing");
 
@@ -761,36 +850,67 @@ export function createWorker(botConfig: BotConfig, bridge: ClaudeBridge, tunnelM
           const q = questions[i];
           const requestId = String(++approvalCounter);
 
-          const keyboard = new InlineKeyboard();
-          q.options.forEach((opt, optIdx) => {
-            keyboard.text(opt.label, `answer:${requestId}:${optIdx}`);
-            keyboard.row();
-          });
-          keyboard.text("Other…", `answer:${requestId}:other`);
+          if (q.multiSelect) {
+            pendingMultiSelect.set(requestId, new Set());
+            // Multi-select: accumulate selections until user taps "Done"
+            const selection = await new Promise<string>((resolve) => {
+              const timer = setTimeout(() => {
+                pendingAnswers.delete(requestId);
+                pendingMultiSelect.delete(requestId);
+                resolve("");
+              }, APPROVAL_TIMEOUT_MS);
 
-          const answer = await new Promise<string>((resolve) => {
-            const timer = setTimeout(() => {
-              pendingAnswers.delete(requestId);
-              resolve(q.options[0]?.label || "");
-            }, APPROVAL_TIMEOUT_MS);
+              pendingAnswers.set(requestId, { resolve, timer, options: q.options, question: q.question });
 
-            pendingAnswers.set(requestId, { resolve, timer, options: q.options, question: q.question });
+              const desc = q.options.map((o) => `• <b>${escapeHtml(o.label)}</b> — ${escapeHtml(o.description)}`).join("\n");
+              bot.api
+                .sendMessage(
+                  chatId,
+                  `<b>[Multi-select]</b> <b>${escapeHtml(q.header)}</b>\n${escapeHtml(q.question)}\n\n${desc}`,
+                  { parse_mode: "HTML", reply_markup: buildMultiSelectKeyboard(requestId, pendingMultiSelect.get(requestId)!, q.options) }
+                )
+                .catch(() => {
+                  clearTimeout(timer);
+                  pendingAnswers.delete(requestId);
+                  pendingMultiSelect.delete(requestId);
+                  resolve("");
+                });
+            });
+            pendingMultiSelect.delete(requestId);
+            answers[q.question] = selection;
+          } else {
+            // Single-select (existing behavior)
+            const keyboard = new InlineKeyboard();
+            q.options.forEach((opt, optIdx) => {
+              keyboard.text(opt.label, `answer:${requestId}:${optIdx}`);
+              keyboard.row();
+            });
+            keyboard.text("Other…", `answer:${requestId}:other`);
 
-            const desc = q.options.map((o) => `• <b>${escapeHtml(o.label)}</b> — ${escapeHtml(o.description)}`).join("\n");
-            bot.api
-              .sendMessage(
-                chatId,
-                `<b>${escapeHtml(q.header)}</b>\n${escapeHtml(q.question)}\n\n${desc}`,
-                { parse_mode: "HTML", reply_markup: keyboard }
-              )
-              .catch(() => {
-                clearTimeout(timer);
+            const answer = await new Promise<string>((resolve) => {
+              const timer = setTimeout(() => {
                 pendingAnswers.delete(requestId);
                 resolve(q.options[0]?.label || "");
-              });
-          });
+              }, APPROVAL_TIMEOUT_MS);
 
-          answers[q.question] = answer;
+              pendingAnswers.set(requestId, { resolve, timer, options: q.options, question: q.question });
+
+              const desc = q.options.map((o) => `• <b>${escapeHtml(o.label)}</b> — ${escapeHtml(o.description)}`).join("\n");
+              bot.api
+                .sendMessage(
+                  chatId,
+                  `<b>${escapeHtml(q.header)}</b>\n${escapeHtml(q.question)}\n\n${desc}`,
+                  { parse_mode: "HTML", reply_markup: keyboard }
+                )
+                .catch(() => {
+                  clearTimeout(timer);
+                  pendingAnswers.delete(requestId);
+                  resolve(q.options[0]?.label || "");
+                });
+            });
+
+            answers[q.question] = answer;
+          }
         }
 
         // Fresh draft ID for the next streaming segment after answers
@@ -890,11 +1010,14 @@ export function createWorker(botConfig: BotConfig, bridge: ClaudeBridge, tunnelM
 
         const seconds = (result.durationMs / 1000).toFixed(1);
         const tokens = result.usage.inputTokens + result.usage.outputTokens;
+        const costStr = bridge.getLastQueryCost(chatId);
         logResult(tokens, result.turns, seconds, tag);
+        const summary = `${tokens.toLocaleString()} tokens | ${result.turns} turns | ${seconds}s` +
+          (costStr ? ` | ${costStr}` : "");
         await bot.api
           .sendMessage(
             chatId,
-            `${tokens.toLocaleString()} tokens | ${result.turns} turns | ${seconds}s`
+            summary
           )
           .catch(() => {});
 
@@ -1008,8 +1131,51 @@ export function createWorker(botConfig: BotConfig, bridge: ClaudeBridge, tunnelM
     } catch {}
   }
 
-  bot.on("message:text", (ctx) => {
+  bot.on("message:text", async (ctx) => {
     const chatId = ctx.chat.id;
+    const text = ctx.message.text;
+    const shell = getShellManager(botConfig.id);
+
+    // ── !command: shell escape hatch (before all other handling) ────────
+    if (text.startsWith("!")) {
+      // Only the owner can execute shell commands — even in group chats
+      if (ctx.from?.id !== config.TELEGRAM_OWNER_ID) {
+        ctx.reply("Unauthorized. Only the bot owner can run shell commands.").catch(() => {});
+        return;
+      }
+      const cmd = text.slice(1).trim();
+
+      // !history — show recent commands
+      if (!cmd || cmd === "history") {
+        if (cmd === "history") {
+          const hist = shell.formatHistory();
+          ctx.reply(`<pre>${escapeHtml(hist)}</pre>`, { parse_mode: "HTML" }).catch(() => {});
+        } else {
+          ctx.reply("Usage: !&lt;command&gt;\n\nExamples:\n!ls -la\n!npm test\n!git status\n!history", { parse_mode: "HTML" }).catch(() => {});
+        }
+        return;
+      }
+
+      // Run the command
+      const reply = await ctx.reply(`<i>Running: ${escapeHtml(cmd)}...</i>`, { parse_mode: "HTML" });
+      const result = shell.run(cmd, botConfig.workingDir);
+
+      const header = result.error
+        ? `<b>! ${escapeHtml(cmd)}</b>  (${(result.elapsedMs / 1000).toFixed(1)}s, ${escapeHtml(result.error)})`
+        : `<b>! ${escapeHtml(cmd)}</b>  (${(result.elapsedMs / 1000).toFixed(1)}s)`;
+
+      const output = result.output || "(no output)";
+      const body = `<pre>${escapeHtml(output)}</pre>`;
+      const full = `${header}\n${body}`;
+
+      // Edit the "Running..." message, or send new if too long
+      try {
+        await ctx.api.editMessageText(chatId, reply.message_id, full, { parse_mode: "HTML" });
+      } catch {
+        await ctx.reply(full, { parse_mode: "HTML" }).catch(() => {});
+      }
+      return;
+    }
 
     // Reset tunnel inactivity timer on any bot activity
     tunnelManager.resetTimer(chatId);
@@ -1076,7 +1242,7 @@ export function createWorker(botConfig: BotConfig, bridge: ClaudeBridge, tunnelM
       return;
     }
 
-    const tmpDir = bridge.getTempDir();
+    const tmpDir = bridge.getTempDir(chatId);
     fs.mkdirSync(tmpDir, { recursive: true, mode: 0o700 });
     const rawName = doc.file_name || `file-${Date.now()}`;
     const fileName = path.basename(rawName).replace(/[^a-zA-Z0-9._-]/g, "_");
@@ -1115,7 +1281,7 @@ export function createWorker(botConfig: BotConfig, bridge: ClaudeBridge, tunnelM
       return;
     }
 
-    const tmpDir = bridge.getTempDir();
+    const tmpDir = bridge.getTempDir(chatId);
     fs.mkdirSync(tmpDir, { recursive: true, mode: 0o700 });
     const ext = path.extname(file.file_path || ".jpg") || ".jpg";
     const tmpFile = path.join(tmpDir, `tg-${Date.now()}${ext}`);
@@ -1192,6 +1358,51 @@ export function createWorker(botConfig: BotConfig, bridge: ClaudeBridge, tunnelM
       return;
     }
 
+    // Permission mode selection
+    const permodeMatch = data.match(/^permode:(.+)$/);
+    if (permodeMatch) {
+      const mode = permodeMatch[1];
+      const chatId = ctx.chat!.id;
+      const modeLabels: Record<string, string> = { auto: "Auto", plan: "Plan", bypass: "Bypass", manual: "Manual" };
+      bridge.setPermissionMode(chatId, mode);
+      await ctx.editMessageText(
+        `Permission mode: <b>${modeLabels[mode] || mode}</b>`,
+        { parse_mode: "HTML" }
+      ).catch(() => {});
+      await ctx.answerCallbackQuery(`Mode: ${modeLabels[mode] || mode}`).catch(() => {});
+      return;
+    }
+
+    // Provider selection
+    const providerMatch = data.match(/^provider:(.+)$/);
+    if (providerMatch) {
+      const providerId = providerMatch[1];
+      const chatId = ctx.chat!.id;
+      const { providerRegistry } = await import("./providers/registry.js");
+      if (providerRegistry.has(providerId)) {
+        bridge.setProvider(chatId, providerId);
+        const label = providerRegistry.get(providerId)?.label || providerId;
+        await ctx.editMessageText(`Provider: <b>${escapeHtml(label)}</b>`, { parse_mode: "HTML" }).catch(() => {});
+        await ctx.answerCallbackQuery(`Provider: ${label}`).catch(() => {});
+      }
+      return;
+    }
+
+    // Effort selection
+    const effortMatch = data.match(/^effort:(.+)$/);
+    if (effortMatch) {
+      const level = effortMatch[1];
+      const chatId = ctx.chat!.id;
+      const effortLabels: Record<string, string> = { low: "Low", medium: "Medium", high: "High", xhigh: "X-High", max: "Max" };
+      bridge.setEffort(chatId, level);
+      await ctx.editMessageText(
+        `Effort set to <b>${effortLabels[level] || level}</b>`,
+        { parse_mode: "HTML" }
+      ).catch(() => {});
+      await ctx.answerCallbackQuery(`Effort: ${effortLabels[level] || level}`).catch(() => {});
+      return;
+    }
+
     // Model selection
     const modelMatch = data.match(/^model:(.+)$/);
     if (modelMatch) {
@@ -1255,6 +1466,74 @@ export function createWorker(botConfig: BotConfig, bridge: ClaudeBridge, tunnelM
       await ctx.editMessageText(approved ? "Plan approved." : "Plan rejected.").catch(() => {});
       await ctx.answerCallbackQuery(approved ? "Plan approved" : "Plan rejected").catch(() => {});
       return;
+    }
+
+    // Multi-select toggle / done / other
+    const msMatch = data.match(/^ms:(toggle|done|other):([^:]+)(?::(.+))?$/);
+    if (msMatch) {
+      const [, msAction, requestId, label] = msMatch;
+      const pending = pendingAnswers.get(requestId);
+      if (!pending) {
+        await ctx.answerCallbackQuery("Request expired").catch(() => {});
+        return;
+      }
+      const selected = pendingMultiSelect.get(requestId);
+
+      if (msAction === "toggle" && selected && label) {
+        // Toggle the option in the accumulated set
+        if (selected.has(label)) {
+          selected.delete(label);
+        } else {
+          selected.add(label);
+        }
+        const keyboard = buildMultiSelectKeyboard(requestId, selected, pending.options);
+        const listed = selected.size > 0
+          ? `\n\n<b>Selected:</b> ${[...selected].map((s) => escapeHtml(s)).join(", ")}`
+          : "";
+        try {
+          await ctx.editMessageText(
+            `<b>[Multi-select]</b> <b>${escapeHtml(pending.question)}</b>${listed}`,
+            { parse_mode: "HTML", reply_markup: keyboard }
+          );
+        } catch {}
+        await ctx.answerCallbackQuery().catch(() => {});
+        return;
+      }
+
+      if (msAction === "done") {
+        // Resolve with accumulated selections (comma-separated)
+        clearTimeout(pending.timer);
+        pendingAnswers.delete(requestId);
+        const joined = selected && selected.size > 0 ? [...selected].join(", ") : "";
+        pending.resolve(joined);
+        await ctx.editMessageText(
+          `<b>${escapeHtml(pending.question)}</b>\n\nSelected: <b>${escapeHtml(joined || "(none)")}</b>`,
+          { parse_mode: "HTML" }
+        ).catch(() => {});
+        await ctx.answerCallbackQuery(joined ? `Selected: ${joined}` : "No selection").catch(() => {});
+        return;
+      }
+
+      if (msAction === "other") {
+        // Clear accumulated and switch to free-text mode
+        clearTimeout(pending.timer);
+        pendingAnswers.delete(requestId);
+        pendingMultiSelect.delete(requestId);
+        const msChatId = ctx.chat!.id;
+        await ctx.answerCallbackQuery("Type your answer").catch(() => {});
+        await ctx.editMessageText(
+          `<b>[Multi-select]</b> <b>${escapeHtml(pending.question)}</b>\n\nType your answer:`,
+          { parse_mode: "HTML" }
+        ).catch(() => {});
+        const sentMsg = await bot.api.sendMessage(msChatId, "Send your reply now…");
+        const freeTimer = setTimeout(() => {
+          pendingFreeText.delete(msChatId);
+          bot.api.editMessageText(msChatId, sentMsg.message_id, "Timed out waiting for answer.").catch(() => {});
+          pending.resolve("");
+        }, APPROVAL_TIMEOUT_MS);
+        pendingFreeText.set(msChatId, { resolve: pending.resolve, timer: freeTimer, question: pending.question, msgId: sentMsg.message_id });
+        return;
+      }
     }
 
     // Question answer

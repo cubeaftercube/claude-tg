@@ -60,9 +60,10 @@ export function claudeToTelegram(markdown: string): string {
       text = text.replace(/(?<!\w)_([^_]+?)_(?!\w)/g, "<i>$1</i>");
 
       // Links: [text](url)
+      // HTML-escape the URL to prevent XSS via href injection
       text = text.replace(
         /\[([^\]]+)\]\(([^)]+)\)/g,
-        '<a href="$2">$1</a>'
+        (_, linkText, url) => `<a href="${escapeHtml(url)}">${linkText}</a>`
       );
 
       // Restore inline code

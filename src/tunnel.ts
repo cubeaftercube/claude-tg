@@ -1,4 +1,4 @@
-import ngrok from "@ngrok/ngrok";
+﻿import ngrok from "@ngrok/ngrok";
 import type { Listener } from "@ngrok/ngrok";
 
 const AUTO_CLOSE_MS = 30 * 60 * 1000; // 30 minutes
@@ -39,7 +39,7 @@ export class TunnelManager {
 
   async openTunnel(chatId: number, port: number): Promise<string> {
     if (!this.authToken) {
-      throw new Error("No ngrok token configured. Run `clautel setup` or set NGROK_AUTH_TOKEN environment variable.");
+      throw new Error("No ngrok token configured. Run `claude-tg setup` or set NGROK_AUTH_TOKEN environment variable.");
     }
 
     // Close existing tunnel for this chat

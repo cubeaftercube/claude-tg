@@ -1,4 +1,4 @@
----
+﻿---
 name: Bug report
 about: Report something that isn't working correctly
 title: ""
@@ -10,7 +10,7 @@ A clear description of what the bug is.
 
 **To reproduce**
 Steps to reproduce the behavior:
-1. Run `clautel ...`
+1. Run `claude-tg ...`
 2. Send message to bot
 3. See error
 
@@ -18,10 +18,10 @@ Steps to reproduce the behavior:
 What you expected to happen.
 
 **Logs**
-Paste relevant output from `clautel logs` (redact any tokens/keys).
+Paste relevant output from `claude-tg logs` (redact any tokens/keys).
 
 **Environment**
 - OS: [e.g. macOS 15.2, Ubuntu 24.04]
 - Node.js version: [e.g. 22.x]
-- Clautel version: [e.g. 2.0.0]
+- Claude-TG version: [e.g. 2.0.0]
 - Claude Code version: [e.g. 1.x]

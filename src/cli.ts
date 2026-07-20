@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -6,14 +6,14 @@ import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 
-const DATA_DIR = path.join(os.homedir(), ".clautel");
+const DATA_DIR = path.join(os.homedir(), ".claude-tg");
 const PID_FILE = path.join(DATA_DIR, "daemon.pid");
 const LOG_FILE = path.join(DATA_DIR, "app.log");
 const CONFIG_FILE = path.join(DATA_DIR, "config.json");
 const LOG_MAX_BYTES = 5 * 1024 * 1024; // 5 MB
 const LOG_KEEP_COUNT = 3; // keep app.log.1, app.log.2, app.log.3
 
-const LAUNCHD_LABEL = "com.clautel.daemon";
+const LAUNCHD_LABEL = "com.claude-tg.daemon";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PKG_VERSION: string = (() => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, "..", "package.json"), "utf-8")).version; } catch { return "unknown"; } })();
@@ -23,7 +23,7 @@ const compiledDaemon = path.join(__dirname, "daemon.js");
 const srcDaemon = path.join(__dirname, "../src/daemon.ts");
 
 // For global installs, compiledDaemon exists and we use node directly (no shell needed).
-// For local dev, we use npx tsx — resolve npx to a full path to avoid shell:true on Windows.
+// For local dev, we use npx tsx вЂ” resolve npx to a full path to avoid shell:true on Windows.
 function resolveDaemonCmd(): [string, string[]] {
   if (fs.existsSync(compiledDaemon)) {
     return [process.execPath, [compiledDaemon]];
@@ -47,7 +47,7 @@ function rotateLog(): void {
     const stat = fs.statSync(LOG_FILE);
     if (stat.size < LOG_MAX_BYTES) return;
 
-    // Shift existing rotated logs: app.log.2 → app.log.3, app.log.1 → app.log.2, etc.
+    // Shift existing rotated logs: app.log.2 в†’ app.log.3, app.log.1 в†’ app.log.2, etc.
     for (let i = LOG_KEEP_COUNT - 1; i >= 1; i--) {
       const from = `${LOG_FILE}.${i}`;
       const to = `${LOG_FILE}.${i + 1}`;
@@ -107,7 +107,7 @@ function hasSystemd(): boolean {
 }
 
 function getSystemdServicePath(): string {
-  return path.join(os.homedir(), ".config", "systemd", "user", "clautel.service");
+  return path.join(os.homedir(), ".config", "systemd", "user", "claude-tg.service");
 }
 
 /** Poll for daemon PID file + running process. Returns PID or null on timeout. */
@@ -136,7 +136,7 @@ function readTailLines(filePath: string, lineCount: number, maxBytes = 32_768): 
     const buf = Buffer.alloc(readSize);
     fs.readSync(fd, buf, 0, readSize, stat.size - readSize);
     const lines = buf.toString("utf-8").split("\n");
-    // If the file was larger than maxBytes, the first "line" is likely truncated — drop it
+    // If the file was larger than maxBytes, the first "line" is likely truncated вЂ” drop it
     if (stat.size > maxBytes) lines.shift();
     // Drop trailing empty line from final newline
     if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
@@ -175,7 +175,7 @@ function startDirect(): void {
   fs.writeFileSync(PID_FILE, String(child.pid));
 
   console.log(`Started (PID ${child.pid})`);
-  console.log(`Logs: clautel logs`);
+  console.log(`Logs: claude-tg logs`);
 }
 
 async function cmdSetup(): Promise<void> {
@@ -183,7 +183,7 @@ async function cmdSetup(): Promise<void> {
   const ask = (q: string): Promise<string> =>
     new Promise((resolve) => rl.question(q, resolve));
 
-  console.log("Clautel — Setup\n");
+  console.log("Claude-TG вЂ” Setup\n");
 
   // Step 1/4: Bot token with live validation
   console.log("Step 1/4: Manager Bot");
@@ -219,14 +219,14 @@ async function cmdSetup(): Promise<void> {
   console.log("  This ensures only you can use the bot.");
   console.log("  To find your ID:");
   console.log("    1. Open Telegram and search for @userinfobot");
-  console.log("    2. Send it any message — it replies with your user ID\n");
+  console.log("    2. Send it any message вЂ” it replies with your user ID\n");
 
   let ownerId = 0;
   while (true) {
     const ownerIdStr = (await ask("  Your Telegram user ID: ")).trim();
     ownerId = parseInt(ownerIdStr, 10);
     if (!ownerIdStr || isNaN(ownerId) || ownerId <= 0) {
-      console.log("  Invalid ID — must be a positive number.\n");
+      console.log("  Invalid ID вЂ” must be a positive number.\n");
       continue;
     }
     console.log(`  Owner set to ${ownerId}\n`);
@@ -235,7 +235,7 @@ async function cmdSetup(): Promise<void> {
 
   // Step 3: Ngrok Configuration (optional, for live preview)
   console.log("Step 3/4: Ngrok Configuration (for live preview)");
-  console.log("  To preview your dev server from your phone, Clautel can create ngrok tunnels.");
+  console.log("  To preview your dev server from your phone, Claude-TG can create ngrok tunnels.");
   console.log("  Get a free auth token at: https://dashboard.ngrok.com/get-started/your-authtoken");
   console.log("  Press Enter to skip.\n");
 
@@ -243,7 +243,7 @@ async function cmdSetup(): Promise<void> {
   if (ngrokToken) {
     console.log("  Ngrok token saved.\n");
   } else {
-    console.log("  Skipped — you can configure it later via NGROK_AUTH_TOKEN env var or re-run setup.\n");
+    console.log("  Skipped вЂ” you can configure it later via NGROK_AUTH_TOKEN env var or re-run setup.\n");
   }
 
   // Write config
@@ -256,60 +256,20 @@ async function cmdSetup(): Promise<void> {
     { mode: 0o600 }
   );
 
-  // Step 4/4: License
-  const { getPaymentUrl, activateLicense, getPlanLabel, saveClaudePlan } = await import("./license.js");
-
-  console.log("Step 4/4: License\n");
-  console.log("  Choose your plan:\n");
-  console.log("    [1] Pro — $4/mo");
-  console.log("        Up to 5 project bots\n");
-  console.log("    [2] Max — $9/mo (Recommended)");
-  console.log("        Unlimited project bots\n");
-
-  let tier: "pro" | "max" = "max";
-  while (true) {
-    const choice = (await ask("  Select plan (1 or 2): ")).trim();
-    if (choice === "1") { tier = "pro"; break; }
-    if (choice === "2" || choice === "") { tier = "max"; break; }
-    console.log("  Please enter 1 or 2.\n");
-  }
-  saveClaudePlan(tier);
-
-  const planLabel = getPlanLabel(tier);
-  console.log(`\n  Selected: ${planLabel}`);
-  console.log(`  Get a license at: ${getPaymentUrl(tier)}`);
-  console.log("  Paste your license key below.\n");
-
-  while (true) {
-    const licenseKeyInput = (await ask("  License key: ")).trim();
-    if (!licenseKeyInput) {
-      console.log(`  A license key is required. Get one at: ${getPaymentUrl(tier)}\n`);
-      continue;
-    }
-    console.log("  Activating license...");
-    const result = await activateLicense(licenseKeyInput, ownerId, tier);
-    if (result.success) {
-      console.log("  License activated successfully!\n");
-      break;
-    } else {
-      console.log(`  Activation failed: ${result.error}`);
-      console.log("  Check your key and try again.\n");
-    }
-  }
   rl.close();
 
   // Completion summary
   console.log("Setup complete!");
   console.log(`  Bot: @${botUsername}`);
   console.log(`  Owner: ${ownerId}`);
-  console.log("  License: Active");
+  console.log("  Claude-TG is free and open source.");
 
   // Auto-install service on macOS (launchd) and Linux (systemd) for startup persistence
   if (process.platform === "darwin" || (process.platform === "linux" && hasSystemd())) {
     console.log("\nInstalling auto-start service...");
     await cmdInstallService();
   } else {
-    console.log("  Run: clautel start");
+    console.log("  Run: claude-tg start");
   }
 }
 
@@ -321,19 +281,19 @@ async function cmdStart(): Promise<void> {
   }
 
   if (!fs.existsSync(CONFIG_FILE)) {
-    console.error("Not configured. Run: clautel setup");
+    console.error("Not configured. Run: claude-tg setup");
     process.exit(1);
   }
 
   // On macOS with launchd service installed, use launchctl to start
   if (process.platform === "darwin" && fs.existsSync(getPlistPath())) {
-    // Unload stale service first — fixes "Load failed: 5: Input/output error"
+    // Unload stale service first вЂ” fixes "Load failed: 5: Input/output error"
     // which occurs when the plist is already loaded from a previous session
     await launchctlExec(["unload", getPlistPath()]);
 
     const { code, stderr } = await launchctlExec(["load", getPlistPath()]);
 
-    // launchctl can exit 0 even on failure (macOS quirk) — check stderr too
+    // launchctl can exit 0 even on failure (macOS quirk) вЂ” check stderr too
     const loadFailed = code !== 0 || stderr.includes("Load failed");
 
     if (loadFailed) {
@@ -346,9 +306,9 @@ async function cmdStart(): Promise<void> {
     const newPid = await waitForDaemon();
     if (newPid) {
       console.log(`Started via launchd (PID ${newPid})`);
-      console.log(`Logs: clautel logs`);
+      console.log(`Logs: claude-tg logs`);
     } else {
-      // Daemon didn't start — show diagnostics and fall back to direct
+      // Daemon didn't start вЂ” show diagnostics and fall back to direct
       console.error("Daemon did not start via launchd.");
       if (fs.existsSync(LOG_FILE)) {
         const lines = readTailLines(LOG_FILE, 5);
@@ -356,7 +316,7 @@ async function cmdStart(): Promise<void> {
           console.error("Recent logs:\n  " + lines.join("\n  "));
         }
       } else {
-        console.error("No log file — daemon crashed before writing output.");
+        console.error("No log file вЂ” daemon crashed before writing output.");
         console.error("Run manually to see errors:");
         console.error(`  ${DAEMON_CMD[0]} ${DAEMON_CMD[1].join(" ")}`);
       }
@@ -376,7 +336,7 @@ async function cmdStart(): Promise<void> {
 
   // On Linux with systemd service installed, use systemctl to start
   if (process.platform === "linux" && fs.existsSync(getSystemdServicePath())) {
-    const { code, stderr } = await systemctlExec(["start", "clautel"]);
+    const { code, stderr } = await systemctlExec(["start", "claude-tg"]);
     if (code !== 0) {
       console.error(`systemd: ${stderr.trim() || `exit code ${code}`}`);
       console.log("Starting directly instead...");
@@ -387,7 +347,7 @@ async function cmdStart(): Promise<void> {
     const newPid = await waitForDaemon();
     if (newPid) {
       console.log(`Started via systemd (PID ${newPid})`);
-      console.log(`Logs: clautel logs`);
+      console.log(`Logs: claude-tg logs`);
     } else {
       console.error("Daemon did not start via systemd.");
       if (fs.existsSync(LOG_FILE)) {
@@ -396,12 +356,12 @@ async function cmdStart(): Promise<void> {
           console.error("Recent logs:\n  " + lines.join("\n  "));
         }
       } else {
-        console.error("No log file — daemon crashed before writing output.");
+        console.error("No log file вЂ” daemon crashed before writing output.");
         console.error("Run manually to see errors:");
         console.error(`  ${DAEMON_CMD[0]} ${DAEMON_CMD[1].join(" ")}`);
       }
       console.log("\nFalling back to direct start...");
-      await systemctlExec(["stop", "clautel"]);
+      await systemctlExec(["stop", "claude-tg"]);
       startDirect();
     }
     return;
@@ -444,7 +404,7 @@ async function cmdStop(): Promise<void> {
   // Restart=always doesn't immediately restart the daemon
   if (process.platform === "linux" && fs.existsSync(getSystemdServicePath())) {
     const pid = readPid();
-    const { code } = await systemctlExec(["stop", "clautel"]);
+    const { code } = await systemctlExec(["stop", "claude-tg"]);
     if (code === 0) {
       fs.rmSync(PID_FILE, { force: true });
       console.log("Stopped (systemd service stopped).");
@@ -503,7 +463,7 @@ function cmdLogs(): void {
     try {
       const stat = fs.statSync(LOG_FILE);
       if (stat.size < position) {
-        // File was truncated (log rotation) — reset
+        // File was truncated (log rotation) вЂ” reset
         position = 0;
       }
       if (stat.size > position) {
@@ -538,12 +498,12 @@ async function cmdInstallService(): Promise<void> {
 
   if (process.platform === "linux" && !hasSystemd()) {
     console.error("systemd not detected. install-service requires systemd.");
-    console.error("You can still run: clautel start (runs as a background process).");
+    console.error("You can still run: claude-tg start (runs as a background process).");
     process.exit(1);
   }
 
   if (!fs.existsSync(CONFIG_FILE)) {
-    console.error("Not configured. Run: clautel setup");
+    console.error("Not configured. Run: claude-tg setup");
     process.exit(1);
   }
 
@@ -565,7 +525,7 @@ async function installLaunchdService(): Promise<void> {
   const [cmd, args] = DAEMON_CMD;
   const programArgs = [cmd, ...args];
 
-  // Only PATH and HOME in the plist — secrets come from ~/.clautel/config.json at runtime
+  // Only PATH and HOME in the plist вЂ” secrets come from ~/.claude-tg/config.json at runtime
   const envEntries: string[] = [
     `    <key>PATH</key>\n    <string>${process.env.PATH || "/usr/local/bin:/usr/bin:/bin"}</string>`,
     `    <key>HOME</key>\n    <string>${os.homedir()}</string>`,
@@ -631,7 +591,7 @@ ${envEntries.join("\n")}
         console.error("Recent logs:\n  " + lines.join("\n  "));
       }
     } else {
-      console.error("No log file — daemon crashed before writing output.");
+      console.error("No log file вЂ” daemon crashed before writing output.");
       console.error("Run manually to see errors:");
       console.error(`  ${DAEMON_CMD[0]} ${DAEMON_CMD[1].join(" ")}`);
     }
@@ -646,7 +606,7 @@ async function installSystemdService(): Promise<void> {
   const execStart = [cmd, ...args].join(" ");
 
   const unit = `[Unit]
-Description=Clautel - Telegram bridge for Claude Code
+Description=Claude-TG - Telegram bridge for Claude Code
 After=network-online.target
 Wants=network-online.target
 
@@ -669,14 +629,14 @@ WantedBy=default.target
 
   // Stop existing service if present (for clean reinstall)
   if (fs.existsSync(getSystemdServicePath())) {
-    await systemctlExec(["stop", "clautel"]);
+    await systemctlExec(["stop", "claude-tg"]);
   }
 
   fs.writeFileSync(getSystemdServicePath(), unit, { mode: 0o644 });
 
   await systemctlExec(["daemon-reload"]);
-  await systemctlExec(["enable", "clautel"]);
-  const { code, stderr } = await systemctlExec(["start", "clautel"]);
+  await systemctlExec(["enable", "claude-tg"]);
+  const { code, stderr } = await systemctlExec(["start", "claude-tg"]);
 
   if (code !== 0) {
     console.error(`systemd: ${stderr.trim() || `exit code ${code}`}`);
@@ -698,12 +658,12 @@ WantedBy=default.target
         console.error("Recent logs:\n  " + lines.join("\n  "));
       }
     } else {
-      console.error("No log file — daemon crashed before writing output.");
+      console.error("No log file вЂ” daemon crashed before writing output.");
       console.error("Run manually to see errors:");
       console.error(`  ${DAEMON_CMD[0]} ${DAEMON_CMD[1].join(" ")}`);
     }
     console.log("\nFalling back to direct start...");
-    await systemctlExec(["stop", "clautel"]);
+    await systemctlExec(["stop", "claude-tg"]);
     startDirect();
   }
 }
@@ -725,8 +685,8 @@ async function cmdUninstallService(): Promise<void> {
       console.log("Service not installed.");
       return;
     }
-    await systemctlExec(["stop", "clautel"]);
-    await systemctlExec(["disable", "clautel"]);
+    await systemctlExec(["stop", "claude-tg"]);
+    await systemctlExec(["disable", "claude-tg"]);
     fs.rmSync(getSystemdServicePath(), { force: true });
     await systemctlExec(["daemon-reload"]);
     console.log("Service uninstalled.");
@@ -737,146 +697,77 @@ async function cmdUninstallService(): Promise<void> {
   process.exit(1);
 }
 
-async function cmdActivate(): Promise<void> {
-  const key = process.argv[3];
-  if (!key) {
-    console.error("Usage: clautel activate <license-key> [--plan pro|max]");
+async function cmdGui(): Promise<void> {
+  // Check config exists
+  if (!fs.existsSync(CONFIG_FILE)) {
+    console.error("Not configured. Run: claude-tg setup");
     process.exit(1);
   }
 
-  // Parse optional --plan flag
-  const { activateLicense, detectClaudePlan, getPlanLabel, isUnderLicensed, getPaymentUrl } = await import("./license.js");
-
-  let planArg: "pro" | "max" | undefined;
-  const planIdx = process.argv.indexOf("--plan");
-  if (planIdx !== -1 && process.argv[planIdx + 1]) {
-    const val = process.argv[planIdx + 1];
-    if (val === "pro" || val === "max") planArg = val;
-  }
-
-  const { tier: detectedTier } = detectClaudePlan();
-  const plan = planArg ?? detectedTier;
-
-  // Enforce: can't use a plan lower than detected Claude plan
-  if (isUnderLicensed(plan, detectedTier)) {
-    console.error(`Your Claude plan is ${getPlanLabel(detectedTier)} — you cannot use a ${getPlanLabel(plan)} license.`);
-    console.error(`Get a ${getPlanLabel(detectedTier)} license at: ${getPaymentUrl(detectedTier)}`);
+  // Warn if daemon is already running standalone
+  const pid = readPid();
+  if (pid && isRunning(pid)) {
+    console.log(`Daemon already running (PID ${pid}). Stop it first: claude-tg stop`);
     process.exit(1);
   }
 
-  // Load owner ID from config for instance fingerprint
-  let ownerId: number | undefined;
-  try {
-    if (fs.existsSync(CONFIG_FILE)) {
-      const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
-      ownerId = cfg.TELEGRAM_OWNER_ID;
+  // Find the electron binary вЂ” try direct path first, fall back to npx
+  const electronExe = process.platform === "win32" ? "electron.exe" : "electron";
+  const electronDirect = path.join(__dirname, "..", "node_modules", "electron", "dist", electronExe);
+  const electronNpx = process.platform === "win32"
+    ? path.join(path.dirname(process.execPath), "node_modules", "npm", "bin", "npx-cli.js")
+    : "npx";
+  const mainJs = path.join(__dirname, "gui", "main.js");
+
+  let electronPath: string;
+  let electronArgs: string[];
+
+  if (fs.existsSync(electronDirect)) {
+    // Direct binary (fast, no extra process)
+    electronPath = electronDirect;
+    electronArgs = [mainJs];
+  } else {
+    // Fall back to npx (downloads electron if missing)
+    console.log("Electron binary not found, using npx...");
+    electronPath = process.execPath; // node
+    electronArgs = [electronNpx, "electron", mainJs];
+  }
+
+  if (!fs.existsSync(mainJs)) {
+    console.error("GUI not built. Run: npm run build");
+    process.exit(1);
+  }
+
+  console.log("Launching Claude-TG GUI...");
+
+  const child = spawn(electronPath, [mainJs], {
+    stdio: "inherit",
+    windowsHide: false,
+    env: {
+      ...process.env,
+      NODE_OPTIONS: "--disable-warning=DEP0040", // punycode deprecation (Node 24)
+    },
+  });
+
+  child.on("error", (err) => {
+    console.error(`Failed to launch GUI: ${err.message}`);
+    process.exit(1);
+  });
+
+  child.on("exit", (code) => {
+    if (code !== 0) {
+      console.error(`GUI exited with code ${code}`);
     }
-  } catch (err) {
-    console.warn(`Warning: Could not read config file: ${(err as Error).message}`);
-    console.warn("License will be activated without owner ID binding.");
-  }
+  });
 
-  console.log(`Detected plan: ${getPlanLabel(plan)}`);
-  console.log("Activating license...");
-  const result = await activateLicense(key, ownerId, plan);
-  if (result.success) {
-    console.log("License activated successfully!");
-    console.log("Restart the daemon to apply: clautel stop && clautel start");
-  } else {
-    console.error(`Activation failed: ${result.error}`);
-    process.exit(1);
-  }
-}
-
-async function cmdDeactivate(): Promise<void> {
-  const { loadLicense, deactivateLicense } = await import("./license.js");
-  const state = loadLicense();
-
-  if (!state.licenseKey) {
-    console.log("No active license to deactivate.");
-    return;
-  }
-
-  console.log("Deactivating license...");
-  const result = await deactivateLicense(state);
-  if (result.success) {
-    console.log("License deactivated. Activation slot freed.");
-  } else {
-    console.error(`Deactivation failed: ${result.error}`);
-    process.exit(1);
-  }
-}
-
-async function cmdLicense(): Promise<void> {
-  const { getLicenseInfo } = await import("./license.js");
-  console.log(getLicenseInfo());
-}
-
-async function cmdRecheck(): Promise<void> {
-  const { loadLicense, validateLicense, activateLicense, saveLicense } = await import("./license.js");
-  const state = loadLicense();
-
-  if (!state.licenseKey) {
-    console.error("No license found. Run: clautel activate <key>");
-    process.exit(1);
-  }
-
-  console.log("Checking license with server...");
-  const result = await validateLicense(state);
-
-  if (result === "valid") {
-    state.status = "active";
-    state.lastValidatedAt = new Date().toISOString();
-    state.lastValidationResult = true;
-    state.graceStartedAt = null;
-    state.warningsSent = 0;
-    saveLicense(state);
-    console.log("License is active.");
-    console.log("Restart the daemon: clautel stop && clautel start");
-    return;
-  }
-
-  if (result === "invalid") {
-    console.error("Server says this license is cancelled or expired.");
-    console.error("If you believe this is wrong, contact support.");
-    process.exit(1);
-  }
-
-  // result === "error": server responded but rejected our stored instance.
-  // Deactivate the stale instance first (frees the slot), then re-activate.
-  console.log("Stored instance is stale — freeing slot and re-activating...");
-
-  // Save key and plan before deactivation nulls them out
-  const licenseKey = state.licenseKey;
-  const plan = state.plan;
-
-  const { deactivateLicense } = await import("./license.js");
-  await deactivateLicense(state).catch(() => {}); // ignore errors — instance may already be gone
-
-  let ownerId: number | undefined;
-  try {
-    if (fs.existsSync(CONFIG_FILE)) {
-      const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, "utf-8"));
-      ownerId = cfg.TELEGRAM_OWNER_ID;
-    }
-  } catch {}
-
-  const reactivate = await activateLicense(licenseKey, ownerId, plan);
-  if (reactivate.success) {
-    console.log("License re-activated successfully.");
-    console.log("Restart the daemon: clautel stop && clautel start");
-  } else {
-    console.error(`Re-activation failed: ${reactivate.error}`);
-    console.error("Try manually: clautel deactivate && clautel activate <your-license-key>");
-    process.exit(1);
-  }
+  // Don't unref вЂ” keep the CLI attached so the user can Ctrl+C
 }
 
 function cmdHelp(): void {
   console.log(`
-Clautel — Telegram bridge for Claude Code
+Claude-TG вЂ” Telegram bridge for Claude Code
 
-Usage: clautel <command>
+Usage: claude-tg <command>
 
 Commands:
   setup              Configure your bot token and Telegram user ID
@@ -884,18 +775,15 @@ Commands:
   stop               Stop the daemon
   status             Show whether the daemon is running
   logs               Tail the daemon logs (Ctrl+C to exit)
-  activate <key>     Activate a license key
-  deactivate         Deactivate this machine's license
-  license            Show current license status
-  recheck            Force re-validate license with server (fixes false expired)
+  gui                Launch the desktop dashboard (Electron)
   install-service    Install as a system service (macOS launchd / Linux systemd)
   uninstall-service  Remove the system service
-  version            Show Clautel version
+  version            Show claude-tg version
   help               Show this help message
 
 Getting started:
-  1. clautel setup
-  2. clautel start
+  1. claude-tg setup
+  2. claude-tg start       (or claude-tg gui for desktop dashboard)
   3. DM your manager bot on Telegram
   4. Use /add to attach a bot to a project directory
 `);
@@ -919,28 +807,19 @@ switch (command) {
   case "logs":
     cmdLogs();
     break;
-  case "activate":
-    cmdActivate().catch((err) => { console.error(err); process.exit(1); });
-    break;
-  case "deactivate":
-    cmdDeactivate().catch((err) => { console.error(err); process.exit(1); });
-    break;
-  case "license":
-    cmdLicense().catch((err) => { console.error(err); process.exit(1); });
-    break;
-  case "recheck":
-    cmdRecheck().catch((err) => { console.error(err); process.exit(1); });
-    break;
   case "install-service":
     cmdInstallService().catch((err) => { console.error(err); process.exit(1); });
     break;
   case "uninstall-service":
     cmdUninstallService().catch((err) => { console.error(err); process.exit(1); });
     break;
+  case "gui":
+    cmdGui().catch((err) => { console.error(err); process.exit(1); });
+    break;
   case "version":
   case "--version":
   case "-v":
-    console.log(`Clautel v${PKG_VERSION}`);
+    console.log(`claude-tg v${PKG_VERSION}`);
     break;
   default:
     cmdHelp();

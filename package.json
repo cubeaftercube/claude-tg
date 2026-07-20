@@ -1,10 +1,11 @@
 {
-  "name": "clautel",
-  "version": "2.4.1",
+  "name": "claude-tg",
+  "version": "2.5.0",
   "description": "Telegram bridge for Claude Code - use Claude from your phone",
   "type": "module",
+  "main": "dist/gui/main.js",
   "bin": {
-    "clautel": "./dist/cli.js"
+    "claude-tg": "./dist/cli.js"
   },
   "files": [
     "dist"
@@ -13,27 +14,50 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "rm -rf dist && tsc && chmod +x dist/cli.js",
+    "build": "rm -rf dist && tsc && node scripts/copy-assets.js && chmod +x dist/cli.js",
     "start": "tsx src/daemon.ts",
     "dev": "tsx watch src/daemon.ts",
     "cli": "tsx src/cli.ts",
+    "gui": "electron dist/gui/main.js",
+    "gui:dev": "tsx src/gui/launch.ts",
     "test": "node --import tsx --test tests/*.test.ts",
-    "keygen": "node scripts/keygen.mjs",
-    "proxy:dev": "cd proxy && npx wrangler dev",
-    "proxy:deploy": "cd proxy && npx wrangler deploy",
+    "dist:win": "npm run build && electron-builder --win portable",
+    "dist:win:nsis": "npm run build && electron-builder --win nsis",
     "prepublishOnly": "npm run build"
   },
-  "author": "Anas Nadeem",
+  "build": {
+    "appId": "com.claude-tg.app",
+    "productName": "Claude-TG",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "assets/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "portable",
+      "icon": "assets/icon.ico"
+    },
+    "portable": {
+      "artifactName": "Claude-TG.exe"
+    }
+  },
+  "author": "CubeAfterCube",
   "license": "MIT",
-  "homepage": "https://clautel.com",
+  "homepage": "https://claude-tg.com",
   "keywords": [
-    "clautel",
+    "claude-tg",
     "claude",
     "anthropic",
     "telegram",
     "claude-code",
     "ai",
-    "mobile"
+    "mobile",
+    "electron",
+    "gui"
   ],
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.52",
@@ -45,6 +69,8 @@
   "devDependencies": {
     "@types/node": "^22",
     "@types/node-cron": "^3.0.11",
+    "electron": "^43.1.1",
+    "electron-builder": "^26.15.3",
     "tsx": "^4",
     "typescript": "^5"
   }

@@ -1,4 +1,4 @@
-import fs from "node:fs";
+﻿import fs from "node:fs";
 import path from "node:path";
 import { Bot } from "grammy";
 import { ClaudeBridge } from "./claude.js";
@@ -10,18 +10,16 @@ import { DATA_DIR, config } from "./config.js";
 import { TunnelManager } from "./tunnel.js";
 import { ScheduleManager, loadSchedules } from "./scheduler.js";
 import { claudeToTelegram, splitMessage } from "./formatter.js";
-
-import { checkLicenseForStartup, startPeriodicValidation, flushLicenseSync, getPaymentUrl, detectClaudePlan, getPlanLabel } from "./license.js";
+import { costTracker } from "./cost/tracker.js";
 
 const PID_FILE = path.join(DATA_DIR, "daemon.pid");
-const HEALTH_CHECK_INTERVAL_MS = 5 * 60_000; // 5 minutes — grammY handles transient reconnects internally
+const HEALTH_CHECK_INTERVAL_MS = 5 * 60_000; // 5 minutes вЂ” grammY handles transient reconnects internally
 
 const activeWorkers = new Map<number, { config: BotConfig; bot: Bot; bridge: ClaudeBridge; tunnelManager: TunnelManager }>();
 let scheduleManager: ScheduleManager;
-const lastWorkerError = new Map<number, number>(); // botId → timestamp of last polling error
+const lastWorkerError = new Map<number, number>(); // botId в†’ timestamp of last polling error
 const RESTART_COOLDOWN_MS = 120_000; // wait 2 minutes before restarting a failed worker
 let healthCheckTimer: NodeJS.Timeout | null = null;
-let licenseTimer: NodeJS.Timeout | null = null;
 
 const WORKER_COMMANDS = [
   { command: "new",        description: "Start a fresh session" },
@@ -43,8 +41,6 @@ const MANAGER_COMMANDS = [
   { command: "bots",         description: "List active worker bots" },
   { command: "add",          description: "Add a new worker bot" },
   { command: "remove",       description: "Remove a worker bot (or 'all')" },
-  { command: "subscribe",    description: "Get a license or upgrade" },
-  { command: "subscription", description: "View license, billing & cancel" },
   { command: "schedules",    description: "View all scheduled tasks across bots" },
   { command: "feedback",     description: "Send feedback or report an issue" },
   { command: "cancel",       description: "Cancel current operation" },
@@ -67,10 +63,10 @@ async function startWorker(botConfig: BotConfig): Promise<void> {
   // Telegram returns 409 Conflict. We retry with backoff, waiting long enough for it to expire.
   const startPolling = async () => {
     const MAX_RETRIES = 3;
-    const RETRY_DELAY_MS = 15_000; // 15s × 1, 15s × 2 = 45s total window (> 30s poll timeout)
+    const RETRY_DELAY_MS = 15_000; // 15s Г— 1, 15s Г— 2 = 45s total window (> 30s poll timeout)
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
       try {
-        await bot.start();
+        await bot.start({ drop_pending_updates: true });
         return;
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
@@ -85,7 +81,7 @@ async function startWorker(botConfig: BotConfig): Promise<void> {
     }
   };
 
-  console.log(`Worker started: @${botConfig.username} → ${botConfig.workingDir}`);
+  console.log(`Worker started: @${botConfig.username} в†’ ${botConfig.workingDir}`);
   startPolling().catch((err: unknown) => {
     const msg = err instanceof Error ? err.message : String(err);
     console.error(`[${botConfig.username}] Polling error:`, msg);
@@ -119,6 +115,24 @@ function getActiveWorkers(): Map<number, { config: BotConfig }> {
 }
 
 async function main() {
+  // Initialize cost tracker (fetches currency rates on first launch)
+  costTracker.init().catch(() => {});
+
+  // Safety net: catch and log unhandled promise rejections.
+  // The Claude Agent SDK may have internal async operations (session file writes,
+  // control requests) that reject after our for-await loop exits on abort.
+  // Without this handler, those rejections crash the process silently.
+  process.on("unhandledRejection", (reason, promise) => {
+    const msg = reason instanceof Error ? reason.message : String(reason);
+    // "Operation aborted" is expected after user-initiated cancels вЂ” don't log as error
+    if (msg === "Operation aborted" || msg.includes("aborted")) {
+      console.log(`[daemon] Suppressed unhandled rejection: ${msg}`);
+      return;
+    }
+    console.error("[daemon] Unhandled rejection:", msg);
+    console.error("[daemon] Promise:", promise);
+  });
+
   // Write our own PID so the CLI can detect us even if launched via npm start
   fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
   fs.writeFileSync(PID_FILE, String(process.pid));
@@ -156,30 +170,12 @@ async function main() {
     }, "bypassPermissions", 25);
   });
 
-  // Detect Claude plan
-  const { tier } = detectClaudePlan();
-  console.log(`Detected Claude plan: ${getPlanLabel(tier)}`);
-
-  // License gate — daemon won't start without a valid license
-  const startupCheck = await checkLicenseForStartup();
-  if (!startupCheck.allowed) {
-    console.error(`License: ${startupCheck.reason}`);
-    console.error(`Purchase: ${getPaymentUrl(tier)}`);
-    console.error(`Activate: clautel activate <key>`);
-    fs.rmSync(PID_FILE, { force: true });
-    process.exit(1);
-  }
-  if (startupCheck.warning) {
-    console.warn(`License warning: ${startupCheck.warning}`);
-  }
-  licenseTimer = startPeriodicValidation();
-
   const managerBot = createManager({ startWorker, stopWorker, getActiveWorkers });
 
   // Exit immediately if another instance is already polling this token
   managerBot.catch((err) => {
     if (err.message.includes("409: Conflict")) {
-      console.error("Another daemon is already running. Stop it first: clautel stop");
+      console.error("Another daemon is already running. Stop it first: claude-tg stop");
     } else {
       console.error("[manager] Error:", err.message);
     }
@@ -212,6 +208,8 @@ async function main() {
         console.error(`[${worker.config.username}] Health check failed, will restart: ${(err as Error).message}`);
         deadConfigs.push(worker.config);
         worker.bridge.abortAll();
+        worker.bridge.flushState();
+        try { await worker.tunnelManager.closeAll(); } catch {}
         try { await worker.bot.stop(); } catch {}
         activeWorkers.delete(id);
       }
@@ -250,12 +248,13 @@ async function main() {
 
   // Start manager bot polling with 409 retry logic.
   // When launchd restarts the daemon after a crash, the previous Telegram
-  // long-poll session may still be alive for up to 30s → 409 Conflict.
+  // long-poll session may still be alive for up to 30s в†’ 409 Conflict.
   const MAX_RETRIES = 3;
-  const RETRY_DELAY_MS = 15_000; // 15s × 1, 15s × 2 = 45s total window (> 30s poll timeout)
+  const RETRY_DELAY_MS = 15_000; // 15s Г— 1, 15s Г— 2 = 45s total window (> 30s poll timeout)
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       await managerBot.start({
+        drop_pending_updates: true,
         onStart: (info) => {
           console.log(`Manager bot: @${info.username}`);
           console.log(`Active workers: ${activeWorkers.size}`);
@@ -271,23 +270,22 @@ async function main() {
         await new Promise((r) => setTimeout(r, wait));
         continue;
       }
-      throw err; // non-409 or final attempt — let main().catch() handle it
+      throw err; // non-409 or final attempt вЂ” let main().catch() handle it
     }
   }
 }
 
 const shutdown = async () => {
   console.log("\nShutting down...");
-  if (licenseTimer) clearInterval(licenseTimer);
   if (healthCheckTimer) clearInterval(healthCheckTimer);
   scheduleManager?.stop();
   for (const [, worker] of activeWorkers) {
     worker.bridge.abortAll();
+    worker.bridge.flushState();
     try { await worker.tunnelManager.closeAll(); } catch {}
     try { await worker.bot.stop(); } catch {}
   }
   activeWorkers.clear();
-  flushLicenseSync();
   fs.rmSync(PID_FILE, { force: true });
   process.exit(0);
 };

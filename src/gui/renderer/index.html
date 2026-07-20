@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'">
+  <title>Claude-TG</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Sidebar -->
+    <nav id="sidebar">
+      <div id="sidebar-header">
+        <h1>Claude-TG</h1>
+        <span class="version">v2.5.0</span>
+      </div>
+      <ul id="nav-tabs">
+        <li class="nav-tab active" data-tab="bots">
+          <svg class="nav-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="2" width="5" height="5" rx="1"/>
+            <rect x="9" y="2" width="5" height="5" rx="1"/>
+            <rect x="2" y="9" width="5" height="5" rx="1"/>
+            <rect x="9" y="9" width="5" height="5" rx="1"/>
+          </svg>
+          <span class="nav-label">Bots</span>
+        </li>
+        <li class="nav-tab" data-tab="logs">
+          <svg class="nav-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="2" y1="3" x2="14" y2="3"/>
+            <line x1="2" y1="7" x2="14" y2="7"/>
+            <line x1="2" y1="11" x2="10" y2="11"/>
+          </svg>
+          <span class="nav-label">Logs</span>
+        </li>
+        <li class="nav-tab" data-tab="chat">
+          <svg class="nav-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 3h12v8H5.5L2 14V3Z"/>
+          </svg>
+          <span class="nav-label">Chat</span>
+        </li>
+        <li class="nav-tab" data-tab="usage">
+          <svg class="nav-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="10" width="3" height="4" rx="0.5"/>
+            <rect x="6.5" y="7" width="3" height="7" rx="0.5"/>
+            <rect x="11" y="4" width="3" height="10" rx="0.5"/>
+          </svg>
+          <span class="nav-label">Usage</span>
+        </li>
+        <li class="nav-tab" data-tab="settings">
+          <svg class="nav-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="8" cy="8" r="2.5"/>
+            <path d="M8 1.5v1.5M8 13v1.5M3.4 3.4l1.06 1.06M11.54 11.54l1.06 1.06M1.5 8H3M13 8h1.5M3.4 12.6l1.06-1.06M11.54 4.46l1.06-1.06"/>
+          </svg>
+          <span class="nav-label">Settings</span>
+        </li>
+      </ul>
+      <div id="sidebar-footer">
+        <div id="daemon-status">
+          <span class="status-dot"></span>
+          <span id="status-text">Starting...</span>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main content area -->
+    <main id="content">
+      <!-- Bots Panel -->
+      <section id="panel-bots" class="panel active">
+        <div class="panel-header">
+          <h2>Bot Management</h2>
+          <button id="btn-add-bot" class="btn btn-primary">+ Add Bot</button>
+        </div>
+        <div id="add-bot-form" class="form-card hidden">
+          <h3>Add Worker Bot</h3>
+          <div class="form-group">
+            <label for="bot-token">Bot Token (from @BotFather)</label>
+            <input type="text" id="bot-token" placeholder="123456:ABC-DEF...">
+          </div>
+          <div class="form-group">
+            <label for="bot-dir">Project Directory</label>
+            <input type="text" id="bot-dir" placeholder="/path/to/project">
+          </div>
+          <div class="form-actions">
+            <button id="btn-add-confirm" class="btn btn-primary">Add</button>
+            <button id="btn-add-cancel" class="btn btn-secondary">Cancel</button>
+          </div>
+          <div id="add-bot-error" class="error-msg hidden"></div>
+        </div>
+        <div id="bot-list"></div>
+      </section>
+
+      <!-- Logs Panel -->
+      <section id="panel-logs" class="panel">
+        <div class="panel-header">
+          <h2>Live Logs</h2>
+          <div class="log-controls">
+            <select id="log-filter-bot" class="select-sm">
+              <option value="all">All bots</option>
+            </select>
+            <select id="log-filter-level" class="select-sm">
+              <option value="all">All levels</option>
+              <option value="info">Info</option>
+              <option value="warn">Warning</option>
+              <option value="error">Error</option>
+            </select>
+            <input type="text" id="log-search" class="input-sm" placeholder="Search logs...">
+            <label class="checkbox-label"><input type="checkbox" id="log-autoscroll" checked> Auto-scroll</label>
+          </div>
+        </div>
+        <div id="log-container">
+          <pre id="log-output"></pre>
+        </div>
+      </section>
+
+      <!-- Chat Panel -->
+      <section id="panel-chat" class="panel">
+        <div class="panel-header">
+          <h2>Chat</h2>
+          <div class="chat-controls">
+            <select id="chat-bot-select" class="select-sm">
+              <option value="">Select bot...</option>
+            </select>
+            <select id="chat-provider" class="select-sm">
+              <option value="claude">Claude</option>
+              <option value="deepseek">DeepSeek</option>
+            </select>
+            <select id="chat-effort" class="select-sm">
+              <option value="medium">Effort: Medium</option>
+              <option value="low">Effort: Low</option>
+              <option value="high">Effort: High</option>
+              <option value="xhigh">Effort: X-High</option>
+              <option value="max">Effort: Max</option>
+            </select>
+            <div class="mode-toggle">
+              <button class="mode-btn active" data-mode="auto">Auto</button>
+              <button class="mode-btn" data-mode="plan">Plan</button>
+              <button class="mode-btn" data-mode="bypass">Bypass</button>
+              <button class="mode-btn" data-mode="manual">Manual</button>
+            </div>
+          </div>
+        </div>
+        <div id="chat-messages"></div>
+        <div id="chat-input-area">
+          <textarea id="chat-input" rows="2" placeholder="Send a message to Claude... (Enter to send, Shift+Enter for newline)"></textarea>
+          <button id="btn-send" class="btn btn-primary">Send</button>
+          <button id="btn-cancel-chat" class="btn btn-danger hidden">Cancel</button>
+        </div>
+      </section>
+
+      <!-- Usage Panel -->
+      <section id="panel-usage" class="panel">
+        <div class="panel-header">
+          <h2>Usage Dashboard</h2>
+          <select id="usage-bot-select" class="select-sm">
+            <option value="">Select bot...</option>
+          </select>
+        </div>
+        <div id="usage-content">
+          <div class="usage-cards">
+            <div class="usage-card">
+              <h3>Input Tokens</h3>
+              <span id="usage-input" class="usage-value">0</span>
+            </div>
+            <div class="usage-card">
+              <h3>Output Tokens</h3>
+              <span id="usage-output" class="usage-value">0</span>
+            </div>
+            <div class="usage-card">
+              <h3>Cache Write</h3>
+              <span id="usage-cache-write" class="usage-value">0</span>
+            </div>
+            <div class="usage-card">
+              <h3>Cache Read</h3>
+              <span id="usage-cache-read" class="usage-value">0</span>
+            </div>
+            <div class="usage-card total">
+              <h3>Total Tokens</h3>
+              <span id="usage-total" class="usage-value">0</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Settings Panel -->
+      <section id="panel-settings" class="panel">
+        <div class="panel-header">
+          <h2>Settings</h2>
+        </div>
+        <div class="settings-section">
+          <h3>Telegram Bot Token</h3>
+          <input type="password" id="settings-bot-token" class="input-sm" placeholder="From @BotFather">
+          <button id="btn-save-bot-token" class="btn btn-primary" style="margin-top:8px">Save Token</button>
+          <span id="bot-token-status" class="status-hint hidden"></span>
+        </div>
+        <div class="settings-section">
+          <h3>Telegram Owner ID</h3>
+          <input type="text" id="settings-owner-id" class="input-sm" placeholder="Your Telegram numeric user ID">
+          <button id="btn-save-owner-id" class="btn btn-primary" style="margin-top:8px">Save Owner ID</button>
+          <span id="owner-id-status" class="status-hint hidden"></span>
+        </div>
+        <div class="settings-section">
+          <h3>Default Model</h3>
+          <select id="settings-model" class="select-sm">
+            <option value="claude-opus-4-8">Claude Opus 4.8</option>
+            <option value="claude-sonnet-5">Claude Sonnet 5</option>
+            <option value="claude-fable-5">Claude Fable 5</option>
+            <option value="claude-haiku-4-5-20251001">Claude Haiku 4.5</option>
+          </select>
+        </div>
+        <div class="settings-section">
+          <h3>Default Effort</h3>
+          <select id="settings-effort" class="select-sm">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+            <option value="xhigh">X-High</option>
+            <option value="max">Max</option>
+          </select>
+        </div>
+        <div class="settings-section">
+          <h3>Default Permission Mode</h3>
+          <div class="mode-toggle settings-mode">
+            <button class="mode-btn active" data-mode="auto">Auto</button>
+            <button class="mode-btn" data-mode="plan">Plan</button>
+            <button class="mode-btn" data-mode="bypass">Bypass</button>
+            <button class="mode-btn" data-mode="manual">Manual</button>
+          </div>
+        </div>
+        <div class="settings-section">
+          <h3>AI Provider</h3>
+          <select id="settings-provider" class="select-sm">
+            <option value="claude">Claude (Agent SDK)</option>
+            <option value="deepseek">DeepSeek (API)</option>
+          </select>
+        </div>
+        <div class="settings-section hidden" id="deepseek-config">
+          <h3>DeepSeek API Key</h3>
+          <input type="password" id="settings-deepseek-key" class="input-sm" placeholder="sk-...">
+          <button id="btn-save-deepseek-key" class="btn btn-primary" style="margin-top:8px">Save Key</button>
+          <span id="deepseek-status" class="status-hint hidden"></span>
+        </div>
+        <div class="settings-section">
+          <h3>Ngrok Auth Token</h3>
+          <input type="password" id="settings-ngrok" class="input-sm" placeholder="Ngrok auth token for /preview...">
+        </div>
+        <div class="settings-section">
+          <h3>About</h3>
+          <p class="about-text">
+            Claude-TG — Telegram bridge for Claude Code.<br>
+            Free and open source (MIT).<br>
+            <a href="https://github.com/cubeaftercube/claude-tg" class="link">github.com/cubeaftercube/claude-tg</a>
+          </p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,9 +1,9 @@
-import path from "node:path";
+﻿import path from "node:path";
 import os from "node:os";
 import fs from "node:fs";
 import "dotenv/config";
 
-export const DATA_DIR = path.join(os.homedir(), ".clautel");
+export const DATA_DIR = path.join(os.homedir(), ".claude-tg");
 const CONFIG_FILE = path.join(DATA_DIR, "config.json");
 
 interface SavedConfig {
@@ -26,8 +26,8 @@ function required(name: string, savedValue?: string | number): string {
   const value = process.env[name] ?? (savedValue !== undefined ? String(savedValue) : undefined);
   if (!value) {
     console.error(`Missing required config: ${name}`);
-    console.error("Run: clautel setup");
-    process.exit(1);
+    console.error("Run: claude-tg setup");
+    return "";
   }
   return value;
 }

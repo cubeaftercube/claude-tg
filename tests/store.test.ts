@@ -91,6 +91,13 @@ describe("store", () => {
     saveBots([testBot]);
     const stat = fs.statSync(botsFile);
     const mode = stat.mode & 0o777;
-    assert.equal(mode, 0o600);
+    // Windows ignores POSIX file modes — 0o600 becomes 0o666.
+    // On Unix, the mode should be exactly 0o600.
+    if (process.platform === "win32") {
+      assert.ok(mode === 0o600 || mode === 0o666,
+        `Expected 0o600 or 0o666 (Windows), got 0${mode.toString(8)}`);
+    } else {
+      assert.equal(mode, 0o600);
+    }
   });
 });

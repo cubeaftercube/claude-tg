@@ -1,6 +1,6 @@
----
+﻿---
 name: Feature request
-about: Suggest an idea for Clautel
+about: Suggest an idea for Claude-TG
 title: ""
 labels: enhancement
 ---

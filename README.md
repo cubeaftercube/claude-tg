@@ -1,26 +1,26 @@
-# Clautel
+﻿# Claude-TG
 
 Use [Claude Code](https://github.com/anthropics/claude-code) from your phone via Telegram.
 
-Run one lightweight process on your dev machine. It connects to Telegram via long polling — no server, no public URL, no ngrok. You get a **manager bot** to add/remove project bots, and a **worker bot** per project that gives you full Claude Code access on mobile.
+Run one lightweight process on your dev machine. It connects to Telegram via long polling вЂ” no server, no public URL, no ngrok. You get a **manager bot** to add/remove project bots, and a **worker bot** per project that gives you full Claude Code access on mobile.
 
 ## Install
 
 ```bash
-npm install -g clautel
+npm install -g claude-tg
 ```
 
 ## Setup
 
-**1. Create a manager bot** — go to [@BotFather](https://t.me/botfather) → `/newbot` → copy the token.
+**1. Create a manager bot** вЂ” go to [@BotFather](https://t.me/botfather) в†’ `/newbot` в†’ copy the token.
 
-**2. Get your Telegram user ID** — message [@userinfobot](https://t.me/userinfobot) → copy the number.
+**2. Get your Telegram user ID** вЂ” message [@userinfobot](https://t.me/userinfobot) в†’ copy the number.
 
 **3. Configure and start:**
 
 ```bash
-clautel setup
-clautel start
+claude-tg setup
+claude-tg start
 ```
 
 ## Usage
@@ -32,8 +32,6 @@ DM your manager bot to manage project bots:
 | `/add TOKEN /path/to/repo` | Attach a new worker bot to a project |
 | `/bots` | List active bots |
 | `/remove @botname` | Stop and remove a bot |
-| `/subscribe` | Get a license or upgrade |
-| `/subscription` | View license, billing & cancel |
 | `/feedback` | Send feedback or report an issue |
 | `/cancel` | Cancel current operation |
 
@@ -56,7 +54,7 @@ Then DM each worker bot directly to use Claude Code:
 
 ### Live Preview
 
-Preview your dev server on your phone with a public URL — powered by [ngrok](https://ngrok.com).
+Preview your dev server on your phone with a public URL вЂ” powered by [ngrok](https://ngrok.com).
 
 | Command | Description |
 |---|---|
@@ -66,7 +64,7 @@ Preview your dev server on your phone with a public URL — powered by [ngrok](h
 
 When you run `/preview` without a port, Claude will automatically start the dev server, set up ngrok, and share the public URL. You can also pass a port directly (e.g. `/preview 3000`) to tunnel an existing server instantly.
 
-You'll be prompted for a free ngrok auth token on first use, or you can set it up during `clautel setup`.
+You'll be prompted for a free ngrok auth token on first use, or you can set it up during `claude-tg setup`.
 
 ### Session Continuity
 
@@ -87,50 +85,46 @@ Conversation history is shown when resuming, so you can pick up where you left o
 ## CLI
 
 ```bash
-clautel setup              # configure token, user ID, and license
-clautel start              # start daemon in background
-clautel stop               # stop daemon
-clautel status             # check if running
-clautel logs               # tail logs (Ctrl+C to exit)
-clautel activate <key>     # activate a license key
-clautel deactivate         # free this machine's activation slot
-clautel license            # show current license status
-clautel install-service    # install as macOS launchd service
-clautel uninstall-service  # remove the launchd service
+claude-tg setup              # configure token and user ID
+claude-tg start              # start daemon in background
+claude-tg stop               # stop daemon
+claude-tg status             # check if running
+claude-tg logs               # tail logs (Ctrl+C to exit)
+claude-tg install-service    # install as macOS launchd service
+claude-tg uninstall-service  # remove the launchd service
 ```
 
 ## Updating
 
 ```bash
-npm install -g clautel@latest
-clautel stop && clautel start
+npm install -g claude-tg@latest
+claude-tg stop && claude-tg start
 ```
 
 ## Architecture
 
 ```
-┌─────────────┐      ┌──────────────┐      ┌──────────────────┐
-│  Telegram    │◄────►│  Manager Bot │      │  Anthropic API   │
-│  (your phone)│      │  (add/remove)│      │  (Claude)        │
-└─────────────┘      └──────┬───────┘      └────────▲─────────┘
-                            │                        │
-                     ┌──────▼───────┐        ┌───────┴────────┐
-                     │  Daemon      │───────►│  Claude Agent   │
-                     │  (daemon.ts) │        │  SDK (query)    │
-                     └──────┬───────┘        └────────────────┘
-                            │
-                ┌───────────┼───────────┐
-                ▼           ▼           ▼
-         ┌──────────┐┌──────────┐┌──────────┐
-         │ Worker 1 ││ Worker 2 ││ Worker N │
-         │ (repo A) ││ (repo B) ││ (repo N) │
-         └──────────┘└──────────┘└──────────┘
+в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ      в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ      в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
+в”‚  Telegram    в”‚в—„в”Ђв”Ђв”Ђв”Ђв–єв”‚  Manager Bot в”‚      в”‚  Anthropic API   в”‚
+в”‚  (your phone)в”‚      в”‚  (add/remove)в”‚      в”‚  (Claude)        в”‚
+в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”      в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”¬в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”      в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв–Ів”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”
+                            в”‚                        в”‚
+                     в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв–јв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ        в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ґв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
+                     в”‚  Daemon      в”‚в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв–єв”‚  Claude Agent   в”‚
+                     в”‚  (daemon.ts) в”‚        в”‚  SDK (query)    в”‚
+                     в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”¬в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”        в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”
+                            в”‚
+                в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”јв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
+                в–ј           в–ј           в–ј
+         в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђв”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђв”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
+         в”‚ Worker 1 в”‚в”‚ Worker 2 в”‚в”‚ Worker N в”‚
+         в”‚ (repo A) в”‚в”‚ (repo B) в”‚в”‚ (repo N) в”‚
+         в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”
 ```
 
-- **Daemon** — single background process, manages bots and license
-- **Manager bot** — Telegram bot to add/remove project workers
-- **Worker bots** — one per project directory, full Claude Code access
-- **License client** — validates against `license.clautel.com` (Ed25519 signed tokens)
+- **Daemon** вЂ” single background process, manages bots
+- **Manager bot** вЂ” Telegram bot to add/remove project workers
+- **Worker bots** вЂ” one per project directory, full Claude Code access
 
 ## Data Flow
 
@@ -138,39 +132,33 @@ clautel stop && clautel start
 |---|---|---|
 | Telegram Bot API | `api.telegram.org` | Messages, photos, documents (long polling) |
 | Anthropic API | Via Claude Agent SDK | Your prompts + project files (as needed by Claude) |
-| License proxy | `license.clautel.com` | License key + hashed instance ID |
 | ngrok (optional) | `ngrok.com` | Dev server tunnel (only when you use `/preview`) |
 
 No telemetry, no analytics, no tracking. The daemon only contacts the services listed above.
 
 ## Security & Transparency
 
-This project is source-available. You can audit every line of code that runs on your machine.
+Claude-TG is open source. You can audit every line of code that runs on your machine.
 
 - See [SECURITY.md](SECURITY.md) for full details on network connections, local storage, and how to verify
-- All local files stored in `~/.clautel/` with `0600` permissions
+- All local files stored in `~/.claude-tg/` with `0600` permissions
 - Verify network connections yourself: `lsof -i -P | grep node` while the daemon runs
-- License validation uses Ed25519 signed tokens — the private key lives in Cloudflare secrets, not in this repo
 
 ## Requirements
 
 - Node.js >= 18
 - [Claude Code](https://github.com/anthropics/claude-code) installed and authenticated on the machine running the daemon
 
-## License
-
-MIT. See [LICENSE](LICENSE) for full terms.
-
 ## Contributing
 
 Contributions are welcome! Here's how to get started:
 
 ```bash
-git clone https://github.com/AnasNadeem/clautel.git
-cd clautel
+git clone https://github.com/CubeAfterCube/claude-tg.git
+cd claude-tg
 npm install
 npm run build
-npm test          # all 55 tests should pass
+npm test
 ```
 
 To run locally during development:

@@ -1,11 +1,12 @@
-node_modules/
+﻿node_modules/
 dist/
 .env
 *.log
 .tmp-images/
-.clautel-state.json
+.claude-tg-state.json
 .DS_Store
 .vscode/
 .idea/
 *.tsbuildinfo
 proxy/node_modules/
+release
