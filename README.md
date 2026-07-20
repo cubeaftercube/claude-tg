@@ -2,7 +2,7 @@
 
 Use [Claude Code](https://github.com/anthropics/claude-code) from your phone via Telegram.
 
-Run one lightweight process on your dev machine. It connects to Telegram via long polling вЂ” no server, no public URL, no ngrok. You get a **manager bot** to add/remove project bots, and a **worker bot** per project that gives you full Claude Code access on mobile.
+Run one lightweight process on your dev machine. It connects to Telegram via long polling — no server, no public URL, no ngrok. You get a **manager bot** to add/remove project bots, and a **worker bot** per project that gives you full Claude Code access on mobile.
 
 ## Install
 
@@ -12,9 +12,9 @@ npm install -g claude-tg
 
 ## Setup
 
-**1. Create a manager bot** вЂ” go to [@BotFather](https://t.me/botfather) в†’ `/newbot` в†’ copy the token.
+**1. Create a manager bot** — go to [@BotFather](https://t.me/botfather) → `/newbot` → copy the token.
 
-**2. Get your Telegram user ID** вЂ” message [@userinfobot](https://t.me/userinfobot) в†’ copy the number.
+**2. Get your Telegram user ID** — message [@userinfobot](https://t.me/userinfobot) → copy the number.
 
 **3. Configure and start:**
 
@@ -54,7 +54,7 @@ Then DM each worker bot directly to use Claude Code:
 
 ### Live Preview
 
-Preview your dev server on your phone with a public URL вЂ” powered by [ngrok](https://ngrok.com).
+Preview your dev server on your phone with a public URL — powered by [ngrok](https://ngrok.com).
 
 | Command | Description |
 |---|---|
@@ -104,27 +104,27 @@ claude-tg stop && claude-tg start
 ## Architecture
 
 ```
-в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ      в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ      в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
-в”‚  Telegram    в”‚в—„в”Ђв”Ђв”Ђв”Ђв–єв”‚  Manager Bot в”‚      в”‚  Anthropic API   в”‚
-в”‚  (your phone)в”‚      в”‚  (add/remove)в”‚      в”‚  (Claude)        в”‚
-в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”      в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”¬в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”      в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв–Ів”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”
-                            в”‚                        в”‚
-                     в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв–јв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ        в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ґв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
-                     в”‚  Daemon      в”‚в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв–єв”‚  Claude Agent   в”‚
-                     в”‚  (daemon.ts) в”‚        в”‚  SDK (query)    в”‚
-                     в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”¬в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”        в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”
-                            в”‚
-                в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”јв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
-                в–ј           в–ј           в–ј
-         в”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђв”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђв”Њв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”ђ
-         в”‚ Worker 1 в”‚в”‚ Worker 2 в”‚в”‚ Worker N в”‚
-         в”‚ (repo A) в”‚в”‚ (repo B) в”‚в”‚ (repo N) в”‚
-         в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”в””в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”
+┌─────────────┐      ┌──────────────┐      ┌──────────────────┐
+│  Telegram    │◄────►│  Manager Bot │      │  Anthropic API   │
+│  (your phone)│      │  (add/remove)│      │  (Claude)        │
+└─────────────┘      └──────┬───────┘      └────────▲─────────┘
+                            │                        │
+                     ┌──────▼───────┐        ┌───────┴────────┐
+                     │  Daemon      │───────►│  Claude Agent   │
+                     │  (daemon.ts) │        │  SDK (query)    │
+                     └──────┬───────┘        └────────────────┘
+                            │
+                ┌───────────┼───────────┐
+                ▼           ▼           ▼
+         ┌──────────┐┌──────────┐┌──────────┐
+         │ Worker 1 ││ Worker 2 ││ Worker N │
+         │ (repo A) ││ (repo B) ││ (repo N) │
+         └──────────┘└──────────┘└──────────┘
 ```
 
-- **Daemon** вЂ” single background process, manages bots
-- **Manager bot** вЂ” Telegram bot to add/remove project workers
-- **Worker bots** вЂ” one per project directory, full Claude Code access
+- **Daemon** — single background process, manages bots
+- **Manager bot** — Telegram bot to add/remove project workers
+- **Worker bots** — one per project directory, full Claude Code access
 
 ## Data Flow
 

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Claude-TG is a free, open-source Telegram bridge for Claude Code вЂ” run one lightweight daemon on your dev machine and use Claude Code from your phone via Telegram. A **manager bot** adds/removes project bots; each project gets its own **worker bot** that gives full Claude Code access on mobile. No license, no payments, no restrictions.
+Claude-TG is a free, open-source Telegram bridge for Claude Code — run one lightweight daemon on your dev machine and use Claude Code from your phone via Telegram. A **manager bot** adds/removes project bots; each project gets its own **worker bot** that gives full Claude Code access on mobile. No license, no payments, no restrictions.
 
 ## Commands
 
@@ -22,19 +22,19 @@ node --import tsx --test tests/formatter.test.ts
 node --import tsx --test tests/store.test.ts
 ```
 
-CI runs on Node 18, 20, 22 вЂ” type check (`tsc --noEmit`), tests, and build.
+CI runs on Node 18, 20, 22 — type check (`tsc --noEmit`), tests, and build.
 
 ## Architecture
 
 ```
 CLI (src/cli.ts)
-  в””в”Ђ spawns в†’ Daemon (src/daemon.ts)
-                 в”њв”Ђ Manager Bot (src/manager.ts) вЂ” owner DMs this to add/remove workers
-                 в””в”Ђ Worker Bot(s) (src/worker.ts) вЂ” one per project directory
-                       в””в”Ђ ClaudeBridge (src/claude.ts) вЂ” wraps @anthropic-ai/claude-agent-sdk
+  └─ spawns → Daemon (src/daemon.ts)
+                 ├─ Manager Bot (src/manager.ts) — owner DMs this to add/remove workers
+                 └─ Worker Bot(s) (src/worker.ts) — one per project directory
+                       └─ ClaudeBridge (src/claude.ts) — wraps @anthropic-ai/claude-agent-sdk
 ```
 
-**Key flow**: User sends a message to a worker bot on Telegram в†’ `worker.ts` receives it via grammY long polling в†’ calls `ClaudeBridge.sendMessage()` в†’ which calls `query()` from `@anthropic-ai/claude-agent-sdk` в†’ streams text chunks back to Telegram via `sendMessageDraft` (smooth streaming in DMs) or `editMessageText` (fallback for groups). Tool approvals, plan approvals, and AskUserQuestion prompts are relayed as Telegram inline keyboard buttons.
+**Key flow**: User sends a message to a worker bot on Telegram → `worker.ts` receives it via grammY long polling → calls `ClaudeBridge.sendMessage()` → which calls `query()` from `@anthropic-ai/claude-agent-sdk` → streams text chunks back to Telegram via `sendMessageDraft` (smooth streaming in DMs) or `editMessageText` (fallback for groups). Tool approvals, plan approvals, and AskUserQuestion prompts are relayed as Telegram inline keyboard buttons.
 
 ### Source files
 
@@ -55,12 +55,12 @@ CLI (src/cli.ts)
 ## Key patterns
 
 - **All files in `~/.claude-tg/`** use mode `0700` dirs / `0600` files
-- **Node.js built-in test runner** (`node:test` + `node:assert/strict`) вЂ” no Jest/Mocha
+- **Node.js built-in test runner** (`node:test` + `node:assert/strict`) — no Jest/Mocha
 - **TypeScript strict mode**, ESM (`"type": "module"`), `NodeNext` module resolution
 - **CLI spawns daemon as detached child process**, communicates via PID file (`~/.claude-tg/daemon.pid`)
 - **GrammY bot framework** for Telegram, long polling (not webhooks)
-- **Claude Agent SDK** (`@anthropic-ai/claude-agent-sdk`) for the `query()` call вЂ” uses the same auth as the `claude` CLI
-- **No ORM, no database** вЂ” everything is JSON files in `~/.claude-tg/`
+- **Claude Agent SDK** (`@anthropic-ai/claude-agent-sdk`) for the `query()` call — uses the same auth as the `claude` CLI
+- **No ORM, no database** — everything is JSON files in `~/.claude-tg/`
 - **409 Conflict retry** on Telegram polling start (3 attempts, 15s/30s/45s backoff) to handle previous instance's long-poll still being alive
 - **`sendMessageDraft`** for smooth animated streaming in DMs; falls back to `editMessageText` for group chats
 - Tests set `HOME` to a temp directory to isolate `~/.claude-tg/` state

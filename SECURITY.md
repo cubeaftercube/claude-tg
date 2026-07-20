@@ -8,7 +8,7 @@
 | Anthropic API | Prompts + project files (via Claude Agent SDK) | `claude.ts` |
 | `ngrok.com` | Local port tunnel (only when user runs `/preview`) | `tunnel.ts` |
 
-No telemetry, no analytics, no tracking. All outbound URLs are hardcoded вЂ” no dynamic endpoint construction from user input.
+No telemetry, no analytics, no tracking. All outbound URLs are hardcoded — no dynamic endpoint construction from user input.
 
 ## What Data Is Sent Where
 
@@ -42,16 +42,16 @@ Temporary files (downloaded photos/documents) go to `os.tmpdir()/claude-tg-{botI
 Overall: **no critical vulnerabilities found**.
 
 - **No hardcoded secrets**
-- **No command injection** вЂ” `spawn()` uses array args, no user input reaches shell
-- **No path traversal** вЂ” session IDs validated as strict UUID regex, all paths use `path.join()`
-- **Input validated** вЂ” bot tokens, UUIDs, ports, file sizes all checked before use
-- **Authorization** вЂ” every bot command checks `TELEGRAM_OWNER_ID` before processing
+- **No command injection** — `spawn()` uses array args, no user input reaches shell
+- **No path traversal** — session IDs validated as strict UUID regex, all paths use `path.join()`
+- **Input validated** — bot tokens, UUIDs, ports, file sizes all checked before use
+- **Authorization** — every bot command checks `TELEGRAM_OWNER_ID` before processing
 
 Minor items (low risk):
 - Temp files written without explicit `0600` mode (inherit from OS tmpdir)
-- launchd plist is world-readable on macOS (but contains no secrets вЂ” only PATH and HOME)
+- launchd plist is world-readable on macOS (but contains no secrets — only PATH and HOME)
 - Error messages in logs could theoretically contain API response details (logs are in user's home dir only)
 
 ## Reporting Vulnerabilities
 
-Report: GitHub Issues вЂ” please include steps to reproduce.
+Report: GitHub Issues — please include steps to reproduce.

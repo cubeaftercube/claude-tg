@@ -30,12 +30,12 @@ npx tsx src/cli.ts start
 
 | Path | Description |
 |---|---|
-| `src/daemon.ts` | Main process вЂ” starts manager bot, restores workers, health checks |
-| `src/manager.ts` | Manager bot вЂ” `/add`, `/remove`, `/bots` commands |
-| `src/worker.ts` | Worker bot вЂ” handles user messages, photos, documents, tool approvals |
-| `src/claude.ts` | Claude bridge вЂ” wraps the Claude Agent SDK `query()` call |
-| `src/config.ts` | Config loader вЂ” reads env vars and `~/.claude-tg/config.json` |
-| `src/store.ts` | Bot persistence вЂ” saves/loads worker bot configs to `bots.json` |
+| `src/daemon.ts` | Main process — starts manager bot, restores workers, health checks |
+| `src/manager.ts` | Manager bot — `/add`, `/remove`, `/bots` commands |
+| `src/worker.ts` | Worker bot — handles user messages, photos, documents, tool approvals |
+| `src/claude.ts` | Claude bridge — wraps the Claude Agent SDK `query()` call |
+| `src/config.ts` | Config loader — reads env vars and `~/.claude-tg/config.json` |
+| `src/store.ts` | Bot persistence — saves/loads worker bot configs to `bots.json` |
 | `src/formatter.ts` | Markdown-to-Telegram HTML converter and message splitter |
 | `src/tunnel.ts` | ngrok tunnel manager for live preview |
 | `src/log.ts` | Structured logging helpers |
@@ -44,7 +44,7 @@ npx tsx src/cli.ts start
 ## Code Style
 
 - TypeScript, strict mode
-- No linter configured yet вЂ” match surrounding code style
+- No linter configured yet — match surrounding code style
 - Prefer explicit types for function signatures, infer for locals
 - Use `node:` prefix for built-in imports (`node:fs`, `node:path`, etc.)
 
@@ -52,8 +52,8 @@ npx tsx src/cli.ts start
 
 1. Create a branch from `main`
 2. Make your changes
-3. Run `npm run build` вЂ” must compile cleanly
-4. Run `npm test` вЂ” all tests must pass
+3. Run `npm run build` — must compile cleanly
+4. Run `npm test` — all tests must pass
 5. Open a PR using the pull request template
 
 ## Tests
